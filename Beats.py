@@ -1,13 +1,9 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import plotly.graph_objects as go
 from datetime import datetime
 import sqlite3
 import hashlib
-from fpdf import FPDF
-import io
-import plotly.express as px
 
 # Database setup
 def init_db():
@@ -130,24 +126,17 @@ def analyze_labs(data):
     
     return analysis
 
-# Visualization functions
-def plot_risk_gauge(risk_score, title):
-    fig = go.Figure(go.Indicator(
-        mode = "gauge+number",
-        value = risk_score,
-        domain = {'x': [0, 1], 'y': [0, 1]},
-        title = {'text': title},
-        gauge = {
-            'axis': {'range': [0, 100]},
-            'bar': {'color': "darkblue"},
-            'steps': [
-                {'range': [0, 30], 'color': "green"},
-                {'range': [30, 70], 'color': "yellow"},
-                {'range': [70, 100], 'color': "red"}
-            ]
-        }
-    ))
-    return fig
+def display_risk_meter(risk_score, title):
+    st.subheader(title)
+    st.progress(risk_score / 100)
+    st.write(f"Risk Score: {risk_score}%")
+    
+    if risk_score < 30:
+        st.success("Low Risk")
+    elif risk_score < 70:
+        st.warning("Moderate Risk")
+    else:
+        st.error("High Risk")
 
 def collect_patient_data():
     data = {}
@@ -272,15 +261,14 @@ def main():
             # Display results
             st.title("Analysis Results")
             
-            # Display risk gauges
-            st.subheader("Risk Assessment")
+            # Display risk meters
             col1, col2 = st.columns(2)
             with col1:
-                st.plotly_chart(plot_risk_gauge(risk_scores['heart_attack'], "Heart Attack Risk"))
-                st.plotly_chart(plot_risk_gauge(risk_scores['stroke'], "Stroke Risk"))
+                display_risk_meter(risk_scores['heart_attack'], "Heart Attack Risk")
+                display_risk_meter(risk_scores['stroke'], "Stroke Risk")
             with col2:
-                st.plotly_chart(plot_risk_gauge(risk_scores['cardiac_arrest'], "Cardiac Arrest Risk"))
-                st.plotly_chart(plot_risk_gauge(risk_scores['heart_failure'], "Heart Failure Risk"))
+                display_risk_meter(risk_scores['cardiac_arrest'], "Cardiac Arrest Risk")
+                display_risk_meter(risk_scores['heart_failure'], "Heart Failure Risk")
             
             # Display lab analysis
             st.subheader("Laboratory Analysis")
@@ -291,6 +279,19 @@ def main():
             
             # Save assessment
             save_assessment(st.session_state.username, data, risk_scores)
+            
+            # BMI Calculation
+            bmi = calculate_bmi(data['weight'], data['height'])
+            st.subheader("BMI Analysis")
+            st.write(f"Your BMI: {bmi}")
+            if bmi < 18.5:
+                st.warning("Underweight")
+            elif bmi < 25:
+                st.success("Normal weight")
+            elif bmi < 30:
+                st.warning("Overweight")
+            else:
+                st.error("Obese")
     
     elif page == "History":
         st.title("Assessment History")
