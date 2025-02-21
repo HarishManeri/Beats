@@ -2,62 +2,146 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from datetime import datetime
-import sqlite3
-import hashlib
 
-# ... (keep all the helper functions the same until show_login_page)
+def calculate_risk_scores(data):
+    risks = {
+        "heart_attack": 0,
+        "stroke": 0,
+        "cardiac_arrest": 0,
+        "heart_failure": 0
+    }
+    
+    # Heart Attack Risk
+    if data['systolic_bp'] > 140: risks['heart_attack'] += 20
+    if data['smoking'] == 'Yes': risks['heart_attack'] += 25
+    if float(data['total_cholesterol']) > 200: risks['heart_attack'] += 15
+    if data['diabetes'] == 'Yes': risks['heart_attack'] += 20
+    if data['family_history'] == 'Yes': risks['heart_attack'] += 20
+    
+    # Stroke Risk
+    if data['systolic_bp'] > 140: risks['stroke'] += 25
+    if data['smoking'] == 'Yes': risks['stroke'] += 20
+    if data['previous_stroke'] == 'Yes': risks['stroke'] += 30
+    if data['age'] > 65: risks['stroke'] += 25
+    
+    # Normalize risks
+    for key in risks:
+        risks[key] = min(risks[key], 100)
+    
+    return risks
 
-def show_login_page():
-    st.title("Heart Disease Prediction System")
+def analyze_labs(data):
+    analysis = []
     
-    tab1, tab2 = st.tabs(["Login", "Register"])
+    if float(data['total_cholesterol']) > 240:
+        analysis.append({
+            'test': 'Total Cholesterol',
+            'value': data['total_cholesterol'],
+            'status': 'High',
+            'recommendation': 'Consider lifestyle changes and consult doctor'
+        })
     
-    with tab1:
-        username = st.text_input("Username", key="login_username")
-        password = st.text_input("Password", type="password", key="login_password")
-        if st.button("Login"):
-            if authenticate(username, password):
-                st.session_state.logged_in = True
-                st.session_state.username = username
-                st.rerun()  # Updated from experimental_rerun()
-            else:
-                st.error("Invalid username or password")
+    if float(data['blood_sugar']) > 126:
+        analysis.append({
+            'test': 'Blood Sugar',
+            'value': data['blood_sugar'],
+            'status': 'High',
+            'recommendation': 'Monitor blood sugar regularly and consult endocrinologist'
+        })
     
-    with tab2:
-        new_username = st.text_input("New Username", key="register_username")
-        new_password = st.text_input("New Password", type="password", key="register_password")
-        confirm_password = st.text_input("Confirm Password", type="password", key="confirm_password")
-        if st.button("Register"):
-            if new_password != confirm_password:
-                st.error("Passwords do not match")
-            elif register_user(new_username, new_password):
-                st.success("Registration successful! Please login.")
-            else:
-                st.error("Username already exists")
+    return analysis
+
+def display_risk_meter(risk_score, title):
+    st.subheader(title)
+    st.progress(risk_score / 100)
+    st.write(f"Risk Score: {risk_score}%")
+    
+    if risk_score < 30:
+        st.success("Low Risk")
+    elif risk_score < 70:
+        st.warning("Moderate Risk")
+    else:
+        st.error("High Risk")
+
+def collect_patient_data():
+    data = {}
+    
+    st.subheader("Demographics")
+    col1, col2 = st.columns(2)
+    with col1:
+        data['age'] = st.number_input("Age", 18, 120)
+        data['gender'] = st.selectbox("Gender", ["Male", "Female"])
+        data['weight'] = st.number_input("Weight (kg)", 30.0, 200.0)
+        data['height'] = st.number_input("Height (cm)", 100.0, 250.0)
+    
+    st.subheader("Vital Signs")
+    col1, col2 = st.columns(2)
+    with col1:
+        data['systolic_bp'] = st.number_input("Systolic BP", 70, 250)
+        data['diastolic_bp'] = st.number_input("Diastolic BP", 40, 150)
+        data['heart_rate'] = st.number_input("Heart Rate (bpm)", 40, 200)
+    
+    st.subheader("Laboratory Results")
+    col1, col2 = st.columns(2)
+    with col1:
+        data['total_cholesterol'] = st.number_input("Total Cholesterol", 0.0, 500.0)
+        data['blood_sugar'] = st.number_input("Blood Sugar", 0.0, 500.0)
+    
+    st.subheader("Medical History")
+    col1, col2 = st.columns(2)
+    with col1:
+        data['smoking'] = st.selectbox("Smoking", ["No", "Yes"])
+        data['diabetes'] = st.selectbox("Diabetes", ["No", "Yes"])
+        data['previous_stroke'] = st.selectbox("Previous Stroke", ["No", "Yes"])
+        data['family_history'] = st.selectbox("Family History of Heart Disease", ["No", "Yes"])
+    
+    return data
 
 def main():
-    st.set_page_config(page_title="Heart Disease Prediction", layout="wide")
+    st.title("Heart Disease Risk Assessment")
     
-    # Initialize database
-    init_db()
+    # Collect patient data
+    data = collect_patient_data()
     
-    # Initialize session state
-    if 'logged_in' not in st.session_state:
-        st.session_state.logged_in = False
-    
-    if not st.session_state.logged_in:
-        show_login_page()
-        return
-    
-    # Main navigation
-    st.sidebar.title(f"Welcome, {st.session_state.username}")
-    page = st.sidebar.selectbox("Navigation", ["New Analysis", "History", "Profile"])
-    
-    if st.sidebar.button("Logout"):
-        st.session_state.logged_in = False
-        st.rerun()  # Updated from experimental_rerun()
-    
-    # ... (rest of the main function remains the same)
+    if st.button("Calculate Risk"):
+        # Calculate risks
+        risk_scores = calculate_risk_scores(data)
+        analysis = analyze_labs(data)
+        
+        # Display results
+        st.title("Analysis Results")
+        
+        # Display risk meters
+        col1, col2 = st.columns(2)
+        with col1:
+            display_risk_meter(risk_scores['heart_attack'], "Heart Attack Risk")
+            display_risk_meter(risk_scores['stroke'], "Stroke Risk")
+        with col2:
+            display_risk_meter(risk_scores['cardiac_arrest'], "Cardiac Arrest Risk")
+            display_risk_meter(risk_scores['heart_failure'], "Heart Failure Risk")
+        
+        # Display lab analysis
+        st.subheader("Laboratory Analysis")
+        if analysis:
+            for item in analysis:
+                with st.expander(f"{item['test']} - {item['status']}"):
+                    st.write(f"Value: {item['value']}")
+                    st.write(f"Recommendation: {item['recommendation']}")
+        else:
+            st.write("All laboratory values are within normal range.")
+        
+        # BMI Calculation
+        bmi = round(data['weight'] / ((data['height']/100) ** 2), 1)
+        st.subheader("BMI Analysis")
+        st.write(f"Your BMI: {bmi}")
+        if bmi < 18.5:
+            st.warning("Underweight")
+        elif bmi < 25:
+            st.success("Normal weight")
+        elif bmi < 30:
+            st.warning("Overweight")
+        else:
+            st.error("Obese")
 
 if __name__ == "__main__":
     main()
